@@ -11,7 +11,9 @@ class Player{
     id = 0;
     name = "";
     totalDamage = 0;
+    totalHealing = 0;
     mainWeapon = "";
+    localplayer = false;
     numeritosRaros:Array<number> = [];
 
     constructor(id:number,name:string, mainWeapon:string = ""){
@@ -21,9 +23,14 @@ class Player{
     }
 
     public addDamage(dmg:number){
-        this.totalDamage += dmg;
+        if(dmg > 0)
+            this.totalDamage += dmg;
+        else
+            this.totalHealing += dmg*-1
     }
 
+
+    
     public restartDmg(){
         this.totalDamage = 0;
     }
@@ -171,7 +178,7 @@ function formatNumber(num:number):string{
     if(num >= 10e2 && num < 1*10e5){
         numCalc = Math.round((num/10e2)*100)/100;
         result = `${numCalc}k`;
-    }else if(num >= 10e6){
+    }else if(num >= 10e5){
         numCalc = Math.round((num/10e5)*100)/100;
         result = `${numCalc}m`;
     }else{
@@ -184,7 +191,7 @@ function formatNumber(num:number):string{
 function getFamePerHour(){
     let momentoActual = performance.now();
     let diff = (momentoActual-referenceTime)/1000;
-    let famePerHour = totalFama/diff;
+    let famePerHour = (totalFama/diff)*3600;
     return famePerHour;
 }
 
@@ -221,7 +228,7 @@ function route(contexto:any){
     let params = contexto.parameters;
     
     if(contexto.code == 3) return; 
-    //console.log(contexto.parameters)
+    //console.log(params);
     switch(contexto.parameters["252"]){
         case 229:
             enterToParty(params);
@@ -282,22 +289,36 @@ function enterToParty(parametros:any):void{
 
         let player = new Player(-1, p);
         player.numeritosRaros = nP;
+        playerList.push(player);
     }
+
 }
 
 function findByNumerosRaros(numeros:Array<number>){
+    if(checkNumbers(localPlayer!, numeros)){
+        return localPlayer;
+    }
+
     for(let i = 0; i < playerList.length; i++){
-        let playerNums = playerList[i].numeritosRaros;
-        let found = true;
-        for(let x = 0; x < playerNums.length; x++){
-            if(numeros[x] != playerNums[x]) {
-                found = false
-                break;
-            }
+        let playerNums = playerList[i];
+        
+        if(checkNumbers(playerNums, numeros)){
+            return playerNums;
         }
-        if(found) return playerList[i];
     }
     return undefined;
+}
+
+function checkNumbers(player:Player, numeros:Array<number>){
+    let playerNums = player.numeritosRaros;
+    let found = true
+    for(let x = 0; x < playerNums.length; x++){
+        if(numeros[x] != playerNums[x]) {
+            found = false
+            break;
+        }
+    }
+    return found;
 }
 
 function getIndexFromName(name:string):number{
@@ -310,16 +331,27 @@ function getIndexFromName(name:string):number{
 }
 
 function playerJoinParty(parametros:any):void{
+    let name = parametros[2];
+    let guid = parametros[1];
+    let id = parametros[0];
 
+    let player = new Player(id, name);
+    player.numeritosRaros = guid;
+
+    playerList.push(player);
 }
 
 function leaveParty(parametros:any):void{
     let numRaros = parametros["1"];
     let p = findByNumerosRaros(numRaros);
-    if(p == undefined) return;
 
-    let indexP = getIndexFromName(p.name);
-    playerList.splice(indexP, 1);
+    if(p == undefined) return;
+    if(p.localplayer){
+        playerList = [];
+    }else{
+        let indexP = getIndexFromName(p.name);
+        playerList.splice(indexP, 1);
+    }
 }
 
 function hitEnemy(parametros:any):void{
@@ -349,8 +381,11 @@ function onMapChange(params:any){
 
     if(localPlayer == undefined){
         localPlayer = new Player(params[0], params[2]);
+        localPlayer.localplayer = true;
+        localPlayer.numeritosRaros = params[1];
     }else{
         localPlayer.id = params[0];
+        localPlayer.numeritosRaros = params[1];
     }
 
     //for(let i = 0; i < playerList.length; i++){

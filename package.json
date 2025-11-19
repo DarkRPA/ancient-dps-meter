@@ -1,9 +1,9 @@
 {
   "name": "ancient-dps-meter",
   "version": "1.0.0",
-  "description": "",
+  "description": "A rudimentary tool badly scripted in charge of simply calculating the fame/hour obtained in Albion Online",
   "license": "ISC",
-  "author": "",
+  "author": "Eryos",
   "type": "commonjs",
   "main": "main.ts",
   "scripts": {
