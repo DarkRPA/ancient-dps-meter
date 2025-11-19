@@ -23,3 +23,5 @@ Here are a few screenshots:![Sober design!](readmeImages/image.png)
 
 You can also manually install it by running `npm install` and then `node .` inside the project folder
 **Root** is needed as to be able to capture Albion Online packets 
+
+**NodeJS v24 is needed**

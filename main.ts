@@ -55,7 +55,7 @@ let playerList:Array<Player> = [];
 let block = setInterval(()=>{
     if(referenceTime == -1 && !debug){
         terminal.clear();
-        terminal("El mapa aún no se ha establecido, cambie de mapa para iniciar el DPS meter\nCada cambio de mapa reseteará el meter");
+        terminal("El mapa aún no se ha establecido");
     }else{
         init();
         clearInterval(block);
