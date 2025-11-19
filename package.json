@@ -1,13 +1,13 @@
 {
   "name": "ancient-dps-meter",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "A rudimentary tool badly scripted in charge of simply calculating the fame/hour obtained in Albion Online",
   "license": "ISC",
   "author": "Eryos",
   "type": "commonjs",
   "main": "main.ts",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "echo \"Error: Tests? Algún día\" && exit 1"
   },
   "dependencies": {
     "@types/node": "^24.10.1",

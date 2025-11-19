@@ -13,7 +13,7 @@
                 "<node_internals>/**"
             ],
             "program": "${workspaceFolder}/main.ts",
-            //"console": "integratedTerminal",
+            "console": "integratedTerminal",
             "runtimeExecutable": "/home/eryos/.nvm/versions/node/v24.11.0/bin/node"
         }
     ]

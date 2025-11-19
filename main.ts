@@ -67,6 +67,7 @@ NETWORK.on(NETWORK.AODecoder.messageType.OperationRequest, onLocalPlayerUpdate)
 NETWORK.on(NETWORK.AODecoder.messageType.OperationResponse, onLocalPlayerUpdate)
 
 function init(){
+    terminal.grabInput({mouse:"button"});
     setInterval(()=>{
         draw();
     }, 1000/TARGET_FRAME)
@@ -81,6 +82,30 @@ const FORMAT = {
         fit: true,
         
     };
+
+terminal.on("key", (name:string, matches:any, data:any)=>{
+    switch(name.toUpperCase()){
+        case "R":
+            reloadEverything();
+            break;
+        case "CTRL_C":
+        case "Q":
+            process.exit(0);
+            break;
+    }
+});
+
+function reloadEverything(){
+    totalFama = 0;
+    if(localPlayer){
+        localPlayer.totalDamage = 0;
+    }
+    for(let i = 0; i < playerList.length; i++){
+        playerList[i].totalDamage = 0;
+    }
+    referenceTime = performance.now();
+}
+
 function draw(){
     //Vamos a imprimir la informacion necesaria
     //Limpiamos lo anterior
@@ -118,6 +143,8 @@ function draw(){
     }else{
         terminal.table(finalDps, FORMAT);
     }
+
+    terminal("Pulsa R para reiniciar el DPS meter y las estadisticas\nPulsa Q|CTRL+C para salir del programa");
 }
 
 function findByName(value:string|number, byName = true):Player|undefined{
@@ -310,6 +337,7 @@ function findByNumerosRaros(numeros:Array<number>){
 }
 
 function checkNumbers(player:Player, numeros:Array<number>){
+    if(!player) return false;
     let playerNums = player.numeritosRaros;
     let found = true
     for(let x = 0; x < playerNums.length; x++){
