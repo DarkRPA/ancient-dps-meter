@@ -1,20 +1,122 @@
-import type { Terminal } from "terminal-kit";
 import type * as AONetworkTypes from "ao-network-revitalized";
 
-let AONetwork = require("ao-network-revitalized");
-let terminalKit = require("terminal-kit");
 //Que pereza formatear la hora loco
+let AONetwork = require("ao-network-revitalized");
 let convert = require("convert-seconds");
+let terminalKit = require("terminal-kit");
+let {copy, paste} = require("copy-paste");
+
 const TARGET_FRAME = 20;
+const OUT_OF_COMBAT_TIMEOUT = 2;
+
+//Debería de reestructurar todo esto.........
+
+//Como odio commonJS, no me complico, se queda aqui todo tiradoa  lo feo, ya lo reescribiré cuando eso
+class CombatPacket{
+    private healing:boolean = false;
+    private causante:Array<Number> = [];
+    private receivedTime:number = 0;
+    private amount:number = 0;
+
+    public constructor(causante:Array<Number>, amount:number){
+        this.causante = causante;
+        this.receivedTime = performance.now();
+        this.amount = Math.abs(amount);
+        this.healing = (amount<0)?true:false;
+    }
+
+    public getTime(){
+        return this.receivedTime;
+    }
+
+    public getAmount(){
+        return this.amount;
+    }
+
+    public isHealing(){
+        return this.healing;
+    }
+
+    public stillInCombat(){
+        return ((performance.now()-this.receivedTime)/1000) <= 5;
+    }
+}
+
+class CombatFragment{
+    private timeStart:number = 0;
+    private timeEnd:number = 0;
+    private packetList:Array<CombatPacket> = [];
+    private totalDamage:number = 0;
+    private over:boolean = false;
+
+    public constructor(... packets:Array<CombatPacket>){
+        packets.sort((a1, a2)=>{
+            if(a1.getTime() > a2.getTime()) return 1;
+            else return -1;
+        });
+
+        for(let i = 0; i < packets.length; i++){
+            this.addPacket(packets[i]);
+        }
+
+        this.timeStart = performance.now();
+    }
+
+    public getTotalDamage(){
+        if(!this.over) return 0;
+        return this.totalDamage;
+    }
+
+    public isOver(){
+        return this.over;
+    }
+
+    public startingTime(){
+        return this.startingTime;
+    }
+
+    public addPacket(packet:CombatPacket){
+        if(this.over) return false;
+
+        this.totalDamage += packet.getAmount();
+        this.packetList.unshift(packet);
+    }
+
+    public end(){
+        this.timeEnd = performance.now();
+        this.over = true;
+    }
+
+    public getDPS(){
+        if(!this.over)return -1;
+        let difference = this.timeEnd - this.timeStart;
+        return this.totalDamage/(difference/1000)
+        
+    }
+
+    public length(){
+        return this.packetList.length;
+    }
+
+    public getElapsedTime():number{
+        if(!this.over) return -1;
+        return this.timeEnd-this.timeStart;
+    }
+
+    public getLastPacket(){
+        return this.packetList[0];
+    }
+}
 
 class Player{
     id = 0;
     name = "";
-    totalDamage = 0;
-    totalHealing = 0;
+    //TODO Hacer esto no?
     mainWeapon = "";
     localplayer = false;
-    numeritosRaros:Array<number> = [];
+    //Hemos descubierto que los numeritos raros es el GUID del usuario
+    guid:Array<number> = [];
+    damageFragments:Array<any> = [] ;//CombatFragment
 
     constructor(id:number,name:string, mainWeapon:string = ""){
         this.name = name;
@@ -22,30 +124,44 @@ class Player{
         this.mainWeapon = mainWeapon;
     }
 
-    public addDamage(dmg:number){
-        if(dmg > 0)
-            this.totalDamage += dmg;
-        else
-            this.totalHealing += dmg*-1
+    public addDamagePacket(packet:any){
+        let activeFragment:undefined|any = undefined;
+        if(this.damageFragments.length == 0 || this.damageFragments[0].isOver()){
+            activeFragment = new CombatFragment();
+            this.damageFragments.unshift(activeFragment!);
+        }
+        this.damageFragments[0].addPacket(packet);
     }
-
-
     
     public restartDmg(){
-        this.totalDamage = 0;
+        this.damageFragments = [];
     }
 
-    public getDPS(timeReference:number):number{
-        let rightNow = performance.now();
-        let diff = (rightNow-referenceTime)/1000;
-        return this.totalDamage/diff;
+    public getDPS():number{
+        let totalDps = 0;
+        let totalTimeElapsed = 0;
+        for(let i = 0; i < this.damageFragments.length; i++){
+            let packet:CombatFragment = this.damageFragments[i];
+            totalDps += packet.getTotalDamage();
+            totalTimeElapsed += packet.getElapsedTime()/1000;
+        }
+        if(totalTimeElapsed == 0) return 0;
+        return totalDps/totalTimeElapsed;
+    }
+
+    public getTotalDamage(){
+        let total = 0;
+        for(let i = 0; i < this.damageFragments.length; i++){
+            total += this.damageFragments[i].getTotalDamage();
+        }
+        return total;
     }
 }   
 
 let localPlayer:Player|undefined;
 const NETWORK:AONetworkTypes.App = new AONetwork.App(false);
 
-let terminal:Terminal = terminalKit.terminal;
+let terminal = terminalKit.terminal;
 
 let referenceTime:number = -1;
 let totalFama = 0;
@@ -92,18 +208,45 @@ terminal.on("key", (name:string, matches:any, data:any)=>{
         case "Q":
             process.exit(0);
             break;
+        case "C":
+            copyToClipboard();
+            break;
     }
 });
 
 function reloadEverything(){
     totalFama = 0;
     if(localPlayer){
-        localPlayer.totalDamage = 0;
+        localPlayer.restartDmg();
     }
     for(let i = 0; i < playerList.length; i++){
-        playerList[i].totalDamage = 0;
+        playerList[i].restartDmg();
     }
     referenceTime = performance.now();
+}
+
+function checkForEndedFragments(){
+    let ps = [localPlayer];
+    ps.push(...playerList);
+
+    for(let i = 0; i < ps.length; i++){
+        let p = ps[i];
+        if(p == undefined || p.damageFragments.length == 0) continue;
+        let fragmento = p.damageFragments[0];
+        if(fragmento.isOver())continue;
+
+        if(fragmento.length() == 0){
+            if((performance.now()/1000 - fragmento.startingTime()/1000) > OUT_OF_COMBAT_TIMEOUT){
+                fragmento.end();
+            }
+            continue;
+        }
+
+        let lastPacket = fragmento.getLastPacket();
+        if((performance.now()/1000 - lastPacket.getTime()/1000) > OUT_OF_COMBAT_TIMEOUT){
+            fragmento.end();
+        }
+    }
 }
 
 function draw(){
@@ -123,9 +266,9 @@ function draw(){
 
             let r = 0;
 
-            if(foundP1?.totalDamage! > foundP2?.totalDamage!){
+            if(foundP1?.getTotalDamage()! > foundP2?.getTotalDamage()!){
                 r = -1;
-            }else if(foundP1?.totalDamage! < foundP2?.totalDamage!){
+            }else{
                 r = 1
             }
 
@@ -144,7 +287,9 @@ function draw(){
         terminal.table(finalDps, FORMAT);
     }
 
-    terminal("Pulsa R para reiniciar el DPS meter y las estadisticas\nPulsa Q|CTRL+C para salir del programa");
+    checkForEndedFragments();
+
+    terminal("Pulsa R para reiniciar el DPS meter y las estadisticas\nPulsa C para copiar los datos\nPulsa Q|CTRL+C para salir del programa");
 }
 
 function findByName(value:string|number, byName = true):Player|undefined{
@@ -224,13 +369,29 @@ function getFamePerHour(){
 
 function getPlayerData(){
     if(localPlayer == undefined) throw new Error("LocalPlayer not initialized");
-    let data = [[localPlayer?.name, formatNumber(localPlayer?.totalDamage), formatNumber(localPlayer?.getDPS(referenceTime!))]];
+    let data = [[localPlayer?.name, formatNumber(localPlayer?.getTotalDamage()), formatNumber(localPlayer?.getDPS())]];
     for(let i = 0; i < playerList.length; i++){
         let player:Player = playerList[i];
-        let reglon = [player.name, formatNumber(player.totalDamage), formatNumber(player.getDPS(referenceTime!))];
+        let reglon = [player.name, formatNumber(player.getTotalDamage()), formatNumber(player.getDPS())];
         data.push(reglon);
     }
     return data;
+}
+
+function copyToClipboard(){
+    let playerData = getPlayerData();
+
+    let resultTest = "Player;Damage;DPS";
+
+    for(let i = 0; i < playerData.length; i++){
+        let p = playerData[i];
+        let s = `\n${p[0]};${p[1]};${p[2]}`;
+        resultTest += s;
+    }
+
+    try{
+        copy(resultTest);
+    }catch(err){}
 }
 
 function test(){
@@ -242,10 +403,6 @@ function test(){
     //playerList.push(p1,p2,p3,p4);
     
     setInterval(()=>{
-        p1.addDamage(Math.random()*100);
-        p2.addDamage(Math.random()*100);
-        p3.addDamage(Math.random()*100);
-        p4.addDamage(Math.random()*100);
         totalFama += 1000;
         draw();
     }, 1000)    
@@ -315,7 +472,7 @@ function enterToParty(parametros:any):void{
         let nP = playersPeroNumerosRaros[i];
 
         let player = new Player(-1, p);
-        player.numeritosRaros = nP;
+        player.guid = nP;
         playerList.push(player);
     }
 
@@ -338,7 +495,7 @@ function findByNumerosRaros(numeros:Array<number>){
 
 function checkNumbers(player:Player, numeros:Array<number>){
     if(!player) return false;
-    let playerNums = player.numeritosRaros;
+    let playerNums = player.guid;
     let found = true
     for(let x = 0; x < playerNums.length; x++){
         if(numeros[x] != playerNums[x]) {
@@ -364,7 +521,7 @@ function playerJoinParty(parametros:any):void{
     let id = parametros[0];
 
     let player = new Player(id, name);
-    player.numeritosRaros = guid;
+    player.guid = guid;
 
     playerList.push(player);
 }
@@ -384,14 +541,14 @@ function leaveParty(parametros:any):void{
 
 function hitEnemy(parametros:any):void{
     let causante = parametros[6];
-    let victima = parametros[0];
-
     let damage = parametros[2];
-
     let player = findById(causante);
     if(!player) return;
 
-    player.addDamage(damage*-1);
+    let paquete = new CombatPacket(causante, damage);
+    player.addDamagePacket(paquete);
+
+    //player.addDamage(damage*-1);
 }
 
 function obtainFame(parametros:any):void{
@@ -410,10 +567,10 @@ function onMapChange(params:any){
     if(localPlayer == undefined){
         localPlayer = new Player(params[0], params[2]);
         localPlayer.localplayer = true;
-        localPlayer.numeritosRaros = params[1];
+        localPlayer.guid = params[1];
     }else{
         localPlayer.id = params[0];
-        localPlayer.numeritosRaros = params[1];
+        localPlayer.guid = params[1];
     }
 
     //for(let i = 0; i < playerList.length; i++){
