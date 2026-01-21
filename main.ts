@@ -90,7 +90,9 @@ class CombatFragment{
     public getDPS(){
         if(!this.over)return -1;
         let difference = this.timeEnd - this.timeStart;
-        return this.totalDamage/(difference/1000)
+        let dps = this.totalDamage/(difference/1000);
+        if(dps !== dps) return 0;
+        return dps;
         
     }
 
@@ -463,8 +465,9 @@ function updatePlayerId(parametros:any):void{
 }
 
 function enterToParty(parametros:any):void{
-    let playersInParty = parametros[5];
-    let playersPeroNumerosRaros = parametros[4];
+    console.log(parametros);
+    let playersInParty = parametros[6];
+    let playersPeroNumerosRaros = parametros[5];
 
     for(let i = 0; i < playersInParty.length; i++){
         let p = playersInParty[i];
@@ -519,6 +522,12 @@ function playerJoinParty(parametros:any):void{
     let name = parametros[2];
     let guid = parametros[1];
     let id = parametros[0];
+
+    console.log(parametros);
+
+    if(id == -1){
+        console.log("Nani");
+    }
 
     let player = new Player(id, name);
     player.guid = guid;
