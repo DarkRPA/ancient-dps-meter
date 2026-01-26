@@ -22,7 +22,7 @@ class CombatPacket{
         this.causante = causante;
         this.receivedTime = performance.now();
         this.amount = Math.abs(amount);
-        this.healing = (amount<0)?true:false;
+        this.healing = (amount>0)?true:false;
     }
 
     public getTime(){
@@ -47,6 +47,7 @@ class CombatFragment{
     private timeEnd:number = 0;
     private packetList:Array<CombatPacket> = [];
     private totalDamage:number = 0;
+    private totalHealing:number = 0;
     private over:boolean = false;
 
     public constructor(... packets:Array<CombatPacket>){
@@ -60,6 +61,10 @@ class CombatFragment{
         }
 
         this.timeStart = performance.now();
+    }
+
+    public getTotalHealing(){
+        
     }
 
     public getTotalDamage(){
@@ -78,7 +83,12 @@ class CombatFragment{
     public addPacket(packet:CombatPacket){
         if(this.over) return false;
 
-        this.totalDamage += packet.getAmount();
+        if(packet.isHealing()){
+            this.totalHealing += packet.getAmount();
+        }else{
+            this.totalDamage += packet.getAmount();
+        }
+        
         this.packetList.unshift(packet);
     }
 
@@ -144,6 +154,10 @@ class Player{
         let totalTimeElapsed = 0;
         for(let i = 0; i < this.damageFragments.length; i++){
             let packet:CombatFragment = this.damageFragments[i];
+            if(packet.getTotalDamage() !== packet.getTotalDamage()){
+                continue;
+            }
+            if(this.damageFragments[i].getTotalDamage() <= 0) continue;
             totalDps += packet.getTotalDamage();
             totalTimeElapsed += packet.getElapsedTime()/1000;
         }
@@ -154,6 +168,10 @@ class Player{
     public getTotalDamage(){
         let total = 0;
         for(let i = 0; i < this.damageFragments.length; i++){
+            if(this.damageFragments[i].getTotalDamage() !== this.damageFragments[i].getTotalDamage()){
+                continue;
+            }
+            if(this.damageFragments[i].getTotalDamage() <= 0) continue;
             total += this.damageFragments[i].getTotalDamage();
         }
         return total;
